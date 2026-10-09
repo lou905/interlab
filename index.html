@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Interference Lab</title>
+<style>
+:root{
+  --bg:#0c1116; --panel:#141d26; --edge:#243542; --grid:#1b2833;
+  --ink:#e8eff4; --dim:#8ba1b2; --faint:#5e7585;
+  --sig:#38d6e6;      /* signal / wave A */
+  --sigB:#b48cff;     /* wave B */
+  --sum:#7dff9b;      /* combined / recovered */
+  --warn:#ffb13c;     /* noise / interference */
+  --bad:#ff5d5d;      /* collision / error */
+  --ok:#7dff9b;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0); padding-bottom:env(safe-area-inset-bottom,0);
+}
+*{box-sizing:inherit}
+html,body{margin:0; background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-variant-numeric:tabular-nums}
+#wrap{max-width:860px; margin:0 auto; padding:18px 16px 40px}
+header{margin-bottom:14px}
+h1{font-size:23px; margin:0; letter-spacing:.2px}
+.lead{color:var(--dim); font-size:14px; margin:6px 0 0; line-height:1.5; max-width:62ch}
+#tabs{display:flex; gap:4px; margin:18px 0 0; border-bottom:1px solid var(--edge); flex-wrap:wrap}
+.tab{appearance:none; background:none; border:0; color:var(--dim); font:inherit; font-size:14px;
+  padding:10px 14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--sig); border-bottom-color:var(--sig)}
+.tab:focus-visible{outline:2px solid var(--sig); outline-offset:2px; border-radius:4px}
+.panel{display:none; margin-top:18px}
+.panel.on{display:block}
+.scope{display:block; width:100%; height:auto; background:#0a0f14;
+  border:1px solid var(--edge); border-radius:10px}
+.note{color:var(--dim); font-size:13.5px; line-height:1.55; margin:14px 0 0; max-width:64ch}
+.note b{color:var(--ink); font-weight:600}
+.ctrls{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px 22px; margin:18px 0 0}
+.ctrl label{display:flex; justify-content:space-between; align-items:baseline; font-size:13px; color:var(--dim); margin-bottom:7px}
+.ctrl .val{color:var(--sig); font-size:13px}
+input[type=range]{width:100%; margin:0; accent-color:var(--sig); height:22px}
+.readout{display:flex; flex-wrap:wrap; gap:8px 10px; margin:16px 0 0}
+.stat{background:var(--panel); border:1px solid var(--edge); border-radius:8px; padding:9px 12px; min-width:92px}
+.stat .k{display:block; font-size:11px; color:var(--faint); letter-spacing:.3px; text-transform:uppercase}
+.stat .v{display:block; font-size:19px; margin-top:3px}
+.verdict{margin-top:14px; font-size:14px; line-height:1.5; padding:11px 13px; border-radius:8px;
+  background:var(--panel); border:1px solid var(--edge); border-left:3px solid var(--sig)}
+.verdict.warn{border-left-color:var(--warn)} .verdict.bad{border-left-color:var(--bad)} .verdict.ok{border-left-color:var(--ok)}
+.msg{display:flex; align-items:center; gap:12px; margin:16px 0 0; flex-wrap:wrap}
+.charbox{font-size:17px; padding:8px 12px; border-radius:8px; border:1px solid var(--edge); background:var(--panel)}
+.charbox .big{font-size:30px; letter-spacing:4px}
+.arrow{color:var(--faint); font-size:20px}
+.ok-txt{color:var(--ok)} .bad-txt{color:var(--bad)} .warn-txt{color:var(--warn)}
+.legend{display:flex; gap:16px; flex-wrap:wrap; margin:12px 0 0; font-size:12.5px; color:var(--dim)}
+.legend i{display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:6px; vertical-align:-1px}
+footer{margin-top:34px; color:var(--faint); font-size:12px; line-height:1.6; border-top:1px solid var(--edge); padding-top:14px}
+</style>
+</head>
+<body>
+<div id="wrap">
+<header>
+  <h1>Interference Lab</h1>
+  <p class="lead">Radio signals share the air. This lab shows three ways they get in each other's way &mdash; waves cancelling, noise burying a message, and too many devices crowding one channel. Nothing is transmitted; it's all math on a screen.</p>
+</header>
+
+<div id="tabs" role="tablist">
+  <button class="tab on" data-p="0" role="tab">Wave interference</button>
+  <button class="tab" data-p="1" role="tab">Signal in noise</button>
+  <button class="tab" data-p="2" role="tab">Crowded channel</button>
+</div>
+
+<!-- ============ TAB 0: INTERFERENCE ============ -->
+<section class="panel on" id="p0" role="tabpanel">
+  <canvas class="scope" id="cv0" width="820" height="300"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--sig)"></i>Wave A</span>
+    <span><i style="background:var(--sigB)"></i>Wave B</span>
+    <span><i style="background:var(--sum)"></i>A + B (what a receiver hears)</span>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl"><label>Wave B frequency <span class="val" id="v_fb">1.00&times;</span></label>
+      <input type="range" id="fb" min="0.5" max="3" step="0.01" value="1"></div>
+    <div class="ctrl"><label>Wave B strength <span class="val" id="v_ab">100%</span></label>
+      <input type="range" id="ab" min="0" max="1" step="0.01" value="1"></div>
+    <div class="ctrl"><label>Wave B phase shift <span class="val" id="v_ph">0&deg;</span></label>
+      <input type="range" id="ph" min="0" max="360" step="1" value="0"></div>
+  </div>
+  <div class="verdict" id="verd0">Set B to the same frequency and strength as A, then slide the phase to 180&deg;.</div>
+  <p class="note"><b>What's happening:</b> two waves in the same space add together point by point. Line them up (phase 0&deg;) and they reinforce &mdash; the combined wave gets taller. Flip B to 180&deg; at equal frequency and strength and every peak meets a trough, so they cancel to a flat line. That total cancellation is <b>destructive interference</b> &mdash; the exact principle a jammer abuses to drown out a real signal.</p>
+</section>
+
+<!-- ============ TAB 1: NOISE ============ -->
+<section class="panel" id="p1" role="tabpanel">
+  <canvas class="scope" id="cv1" width="820" height="300"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--sig)"></i>Clean bits sent</span>
+    <span><i style="background:var(--warn)"></i>What arrives (signal + noise)</span>
+    <span><i style="background:var(--sum)"></i>Decision line</span>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl"><label>Noise level <span class="val" id="v_ns">low</span></label>
+      <input type="range" id="ns" min="0" max="1.6" step="0.01" value="0.25"></div>
+    <div class="ctrl"><label>Message <span class="val" id="v_ch">A</span></label>
+      <input type="range" id="ch" min="33" max="90" step="1" value="65"></div>
+  </div>
+  <div class="readout">
+    <div class="stat"><span class="k">Signal-to-noise</span><span class="v mono" id="s_snr">&mdash;</span></div>
+    <div class="stat"><span class="k">Bits flipped</span><span class="v mono" id="s_err">0 / 8</span></div>
+  </div>
+  <div class="msg">
+    <div class="charbox">sent<br><span class="big mono" id="m_sent">A</span></div>
+    <span class="arrow">&rarr;</span>
+    <div class="charbox">received<br><span class="big mono" id="m_recv">A</span></div>
+  </div>
+  <div class="verdict" id="verd1">The message is clear.</div>
+  <p class="note"><b>What's happening:</b> the letter is sent as eight bits &mdash; a high level for 1, low for 0. The receiver reads each bit by asking "is it above or below the decision line?" Noise is random wobble added on top. A little is harmless, but as the noise floor rises it buries the signal, pushes bits across the line, and the letter arrives as something else. Real systems fight this with <b>error-correcting codes</b> that add extra bits to catch and repair flips.</p>
+</section>
+
+<!-- ============ TAB 2: CONGESTION ============ -->
+<section class="panel" id="p2" role="tabpanel">
+  <canvas class="scope" id="cv2" width="820" height="300"></canvas>
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i>Got through</span>
+    <span><i style="background:var(--bad)"></i>Collision (both fail)</span>
+    <span><i style="background:var(--grid)"></i>Silent</span>
+  </div>
+  <div class="ctrls">
+    <div class="ctrl"><label>Devices on the channel <span class="val" id="v_dev">7</span></label>
+      <input type="range" id="dev" min="1" max="30" step="1" value="7"></div>
+  </div>
+  <div class="readout">
+    <div class="stat"><span class="k">Getting through</span><span class="v mono" id="s_thru">&mdash;</span></div>
+    <div class="stat"><span class="k">Collisions</span><span class="v mono" id="s_col">&mdash;</span></div>
+    <div class="stat"><span class="k">Best so far</span><span class="v mono" id="s_best">&mdash;</span></div>
+  </div>
+  <div class="verdict" id="verd2">One device has the channel to itself.</div>
+  <p class="note"><b>What's happening:</b> every device shares one channel and tries to talk in short time slots. If exactly one talks in a slot, its message gets through (green). If two or more talk at once they <b>collide</b> and both have to resend (red). Adding devices helps at first, then each new talker causes more collisions than successes and useful throughput <b>collapses</b>. That's why one Wi-Fi access point slows to a crawl when a whole class piles onto it &mdash; congestion, not weak signal.</p>
+</section>
+
+<footer>
+  Interference Lab &mdash; a classroom simulation. No radio is transmitted; every graph is computed on your device.
+  Runs offline in any modern browser.
+</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var TAU=Math.PI*2;
+function $(id){return document.getElementById(id);}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+var COL={sig:css('--sig'),sigB:css('--sigB'),sum:css('--sum'),warn:css('--warn'),
+         bad:css('--bad'),ok:css('--ok'),grid:css('--grid'),dim:css('--dim'),faint:css('--faint')};
+
+/* crisp canvas on high-DPI screens */
+function fit(cv){
+  var dpr=Math.min(window.devicePixelRatio||1,2), w=cv.clientWidth, h=cv.clientHeight;
+  if(cv._w===w&&cv._h===h&&cv._d===dpr) return cv.getContext('2d');
+  cv._w=w; cv._h=h; cv._d=dpr; cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  var ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return ctx;
+}
+function grid(ctx,w,h){
+  ctx.fillStyle='#0a0f14'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle=COL.grid; ctx.lineWidth=1;
+  for(var x=0;x<=w;x+=w/16){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  for(var y=0;y<=h;y+=h/8){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+}
+
+/* ---------- Tab 0: interference ---------- */
+var I={fb:1,ab:1,ph:0};
+function bindRange(id,fn){ var e=$(id); e.addEventListener('input',fn); return e; }
+bindRange('fb',function(){I.fb=+this.value; $('v_fb').textContent=I.fb.toFixed(2)+'\u00d7';});
+bindRange('ab',function(){I.ab=+this.value; $('v_ab').textContent=Math.round(I.ab*100)+'%';});
+bindRange('ph',function(){I.ph=+this.value; $('v_ph').textContent=I.ph+'\u00b0';});
+function drawInterference(cv,t){
+  var ctx=fit(cv),w=cv.clientWidth,h=cv.clientHeight; grid(ctx,w,h);
+  var mid=h/2, amp=h*0.17, cyc=3, scroll=t*0.6, ph=I.ph*Math.PI/180;
+  function wave(fn,col,lw,glow){
+    ctx.beginPath();
+    for(var px=0;px<=w;px++){var ph0=(px/w)*cyc*TAU+scroll; ctx.lineTo(px,mid-fn(ph0)*amp);}
+    ctx.strokeStyle=col; ctx.lineWidth=lw; ctx.shadowBlur=glow||0; ctx.shadowColor=col; ctx.stroke(); ctx.shadowBlur=0;
+  }
+  wave(function(a){return Math.sin(a);},COL.sig,1.5);
+  wave(function(a){return I.ab*Math.sin(I.fb*a+ph);},COL.sigB,1.5);
+  wave(function(a){return clamp(Math.sin(a)+I.ab*Math.sin(I.fb*a+ph),-1.9,1.9);},COL.sum,2.4,8);
+  /* verdict */
+  var vd=$('verd0'); vd.className='verdict';
+  if(Math.abs(I.fb-1)<0.02){
+    if(I.ph>=165&&I.ph<=195&&I.ab>=0.92){ vd.className='verdict ok';
+      vd.textContent='Total cancellation. The two waves erase each other \u2014 a receiver hears silence. This is destructive interference.'; }
+    else if(I.ph<=15||I.ph>=345){ vd.textContent='In phase: the waves reinforce and the combined signal grows taller (constructive interference).'; }
+    else if(I.ph>=165&&I.ph<=195){ vd.className='verdict warn';
+      vd.textContent='Opposite phase, but B is weaker than A \u2014 partial cancellation. Push B\u2019s strength to 100% to erase it completely.'; }
+    else{ vd.textContent='Same frequency, partly out of step \u2014 they partly cancel. Slide toward 180\u00b0 for full cancellation.'; }
+  } else {
+    vd.className='verdict warn';
+    vd.textContent='Different frequencies: the combined wave swells and fades in a repeating "beat." You can\u2019t fully cancel a signal unless you match its frequency.';
+  }
+}
+
+/* ---------- Tab 1: signal in noise ---------- */
+var N={ns:0.25,code:65,real:null,realAt:0};
+function gauss(){var u=0,v=0;while(u===0)u=Math.random();while(v===0)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);}
+function bitsOf(code){var b=[];for(var i=7;i>=0;i--)b.push((code>>i)&1);return b;}
+bindRange('ns',function(){N.ns=+this.value;
+  $('v_ns').textContent=N.ns<0.35?'low':N.ns<0.8?'medium':N.ns<1.2?'high':'severe';});
+bindRange('ch',function(){N.code=+this.value; $('v_ch').textContent=String.fromCharCode(N.code);});
+function drawNoise(cv,t){
+  var ctx=fit(cv),w=cv.clientWidth,h=cv.clientHeight; grid(ctx,w,h);
+  var bits=bitsOf(N.code), nb=8, bw=w/nb, mid=h/2, lvl=h*0.28;
+  /* refresh the random noise realization ~5x/sec so readouts are steady */
+  var now=performance.now();
+  if(!N.real||now-N.realAt>200){
+    N.real=[]; for(var s=0;s<nb*24;s++) N.real.push(gauss()*N.ns);
+    N.realAt=now;
+  }
+  /* decision line */
+  ctx.strokeStyle=COL.sum; ctx.setLineDash([5,5]); ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke(); ctx.setLineDash([]);
+  /* clean sent bits (steps) */
+  ctx.strokeStyle=COL.sig; ctx.lineWidth=1.5; ctx.beginPath();
+  for(var i=0;i<nb;i++){var y=mid-(bits[i]?lvl:-lvl); ctx.moveTo(i*bw,y); ctx.lineTo((i+1)*bw,y);}
+  ctx.stroke();
+  /* received = level + noise */
+  ctx.strokeStyle=COL.warn; ctx.lineWidth=1.3; ctx.beginPath();
+  var k=0, sums=new Array(nb).fill(0), cnt=new Array(nb).fill(0);
+  for(var bi=0;bi<nb;bi++){
+    var base=bits[bi]?lvl:-lvl;
+    for(var j=0;j<24;j++){
+      var px=bi*bw+(j/24)*bw, val=base+ N.real[k++]*lvl;
+      sums[bi]+=val; cnt[bi]++;
+      var py=clamp(mid-val,2,h-2);
+      if(px===0&&bi===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+  }
+  ctx.stroke();
+  /* decode + score */
+  var recvBits=[],errs=0;
+  for(var m=0;m<nb;m++){var avg=sums[m]/cnt[m], b=avg>0?1:0; recvBits.push(b); if(b!==bits[m])errs++;}
+  var snr=10*Math.log10(1/(N.ns*N.ns+1e-6));
+  $('s_snr').textContent=(snr>40?'\u221e':snr.toFixed(1)+' dB');
+  $('s_err').textContent=errs+' / 8';
+  $('s_err').className='v mono '+(errs===0?'':errs<3?'warn-txt':'bad-txt');
+  var sentC=String.fromCharCode(N.code);
+  var recvCode=0; for(var r=0;r<8;r++) recvCode=(recvCode<<1)|recvBits[r];
+  var recvC=(recvCode>=32&&recvCode<127)?String.fromCharCode(recvCode):'\u25a1';
+  $('m_sent').textContent=sentC;
+  $('m_recv').textContent=recvC; $('m_recv').className='big mono '+(errs===0?'ok-txt':'bad-txt');
+  var vd=$('verd1'); vd.className='verdict';
+  if(errs===0){vd.className='verdict ok'; vd.textContent='The message is clear \u2014 noise is well below the signal, so every bit lands on the right side of the line.';}
+  else if(errs<3){vd.className='verdict warn'; vd.textContent='Noise is corrupting the message. A few bits have flipped and the letter is wrong \u2014 this is where error-correcting codes earn their keep.';}
+  else{vd.className='verdict bad'; vd.textContent='The signal is buried. So many bits flip that the message is unrecoverable \u2014 effectively jammed by noise.';}
+}
+
+/* ---------- Tab 2: crowded channel ---------- */
+var C={dev:7,p:0.14,slots:[],win:[],best:0,acc:0,accT:0};
+var COLS=40;
+bindRange('dev',function(){C.dev=+this.value; $('v_dev').textContent=C.dev; C.best=0; C.win=[];});
+function stepSlots(){
+  /* each device transmits this slot with prob p; count outcome */
+  var talkers=0, who=[];
+  for(var d=0;d<C.dev;d++){ if(Math.random()<C.p){talkers++; who.push(d);} }
+  var outcome = talkers===0?0 : talkers===1?1 : 2; /* silent / success / collision */
+  C.slots.push({n:C.dev,who:who,out:outcome,tk:talkers});
+  if(C.slots.length>COLS) C.slots.shift();
+  C.win.push(outcome); if(C.win.length>120) C.win.shift();
+}
+function drawCongestion(cv,t){
+  var ctx=fit(cv),w=cv.clientWidth,h=cv.clientHeight; grid(ctx,w,h);
+  /* advance ~12 slots/sec */
+  C.acc+=t-C.accT; C.accT=t;
+  while(C.acc>0.08){ stepSlots(); C.acc-=0.08; }
+  /* draw slot grid: columns = time, rows = devices (capped) */
+  var rows=Math.min(C.dev,16), pad=8, gw=(w-pad*2)/COLS, gh=(h-pad*2)/rows;
+  for(var ci=0;ci<C.slots.length;ci++){
+    var sl=C.slots[ci], x=pad+ci*gw, dim=ci<C.slots.length-1?1:1;
+    for(var ri=0;ri<rows;ri++){
+      var active = sl.who.indexOf(ri)>=0 || (C.dev>16 && sl.tk>0 && ri>=rows-1 && Math.random()<0);
+      var y=pad+ri*gh, col;
+      if(!active) col=COL.grid;
+      else col = sl.out===1?COL.ok : COL.bad;
+      ctx.fillStyle=col; ctx.globalAlpha=active?0.92:0.5;
+      ctx.fillRect(x+0.5,y+0.5,gw-1,gh-1);
+    }
+  }
+  ctx.globalAlpha=1;
+  /* stats over the recent window */
+  var succ=0,coll=0; for(var i=0;i<C.win.length;i++){if(C.win[i]===1)succ++;else if(C.win[i]===2)coll++;}
+  var tot=Math.max(1,C.win.length);
+  var thru=succ/tot, colr=coll/tot;
+  if(C.win.length>30 && thru>C.best) C.best=thru;
+  $('s_thru').textContent=Math.round(thru*100)+'%';
+  $('s_col').textContent=Math.round(colr*100)+'%';
+  $('s_thru').className='v mono '+(thru>0.3?'ok-txt':thru>0.15?'warn-txt':'bad-txt');
+  $('s_col').className='v mono '+(colr<0.2?'':colr<0.5?'warn-txt':'bad-txt');
+  $('s_best').textContent=Math.round(C.best*100)+'%';
+  var vd=$('verd2'); vd.className='verdict';
+  var G=C.dev*C.p;
+  if(C.dev===1){vd.textContent='One device owns the channel \u2014 almost everything gets through, but you\u2019re barely using the airtime.';}
+  else if(G<0.9){vd.className='verdict ok'; vd.textContent='Still room to grow: adding devices is raising throughput because collisions are rare.';}
+  else if(G<1.5){vd.className='verdict ok'; vd.textContent='Near the sweet spot \u2014 this is about as much useful traffic as one shared channel can carry.';}
+  else if(G<2.4){vd.className='verdict warn'; vd.textContent='Past the peak: collisions are climbing and each new device now costs more than it adds.';}
+  else{vd.className='verdict bad'; vd.textContent='Congestion collapse \u2014 devices spend most slots colliding and resending. More users, less actual throughput.';}
+}
+
+/* ---------- tabs + loop ---------- */
+var panels=[$('p0'),$('p1'),$('p2')], tabs=[].slice.call(document.querySelectorAll('.tab')), cur=0;
+tabs.forEach(function(tb){
+  tb.addEventListener('click',function(){
+    cur=+tb.dataset.p;
+    tabs.forEach(function(x){x.classList.toggle('on',+x.dataset.p===cur);});
+    panels.forEach(function(x,i){x.classList.toggle('on',i===cur);});
+    if(cur===2){C.accT=clock;} /* avoid a time jump into the sim */
+  });
+});
+var cvs=[$('cv0'),$('cv1'),$('cv2')], clock=0;
+function loop(ts){
+  clock=ts/1000;
+  if(cur===0) drawInterference(cvs[0],clock);
+  else if(cur===1) drawNoise(cvs[1],clock);
+  else drawCongestion(cvs[2],clock);
+  requestAnimationFrame(loop);
+}
+/* init labels */
+$('v_fb').textContent='1.00\u00d7'; $('v_ab').textContent='100%'; $('v_ph').textContent='0\u00b0';
+$('v_ns').textContent='low'; $('v_ch').textContent='A'; $('v_dev').textContent='7';
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
